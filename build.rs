@@ -3,6 +3,8 @@ extern crate cbindgen;
 use std::env;
 
 fn main() {
+    println!("cargo::rustc-link-arg=-Wl,-soname=libpaper2_scotland2.so");
+
     let crate_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
 
     cbindgen::Builder::new()

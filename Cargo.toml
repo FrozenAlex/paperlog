@@ -28,6 +28,7 @@ members = ["questloader", "scotland2"]
 
 [lib]
 name = "paper2"
+crate-type = ["cdylib"]
 
 [features]
 default = [
