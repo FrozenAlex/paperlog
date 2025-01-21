@@ -1,11 +1,15 @@
 use std::{ffi::CStr, path::PathBuf};
-
+use std::ffi::CString;
 use ctor::ctor;
 use paper2::LoggerConfig;
+use std::panic::PanicHookInfo;
+use std::backtrace::Backtrace;
+use tracing_error::SpanTrace;
 
 #[ctor]
 fn dlopen_initialize() {
-    println!("DLOpen initializing");
+    std::panic::set_hook(panic_hook(true, true));
+    log_info(String::from("DLOpen initializing"));
 
     let id = unsafe { CStr::from_ptr(scotland2_rs::scotland2_raw::modloader_get_application_id()) }
         .to_string_lossy();
@@ -17,7 +21,82 @@ fn dlopen_initialize() {
 
     let file = path.join("Paperlog.log");
     if let Err(e) = paper2::init_logger(config, file) {
-        eprintln!("Error occurred in logging thread: {}", e);
+        log_info(
+            String::from(
+                format!("Error occurred in logging thread: {}", e)
+            )
+        );
         panic!("Error occurred in logging thread: {}", e);
     }
+}
+
+fn log_error(message_str: String) {
+    use ndk_sys::__android_log_buf_write;
+    use ndk_sys::{android_LogPriority, log_id};
+
+    let priority = android_LogPriority::ANDROID_LOG_ERROR.0;
+    let buffer = log_id::LOG_ID_DEFAULT.0;
+    let tag = CString::from(c"PANIC");
+    let msg = match CString::new(message_str) {
+        Ok(s) => s,
+        Err(e) => {
+            return;
+        }
+    };
+
+    unsafe { __android_log_buf_write(buffer as i32, priority as i32, tag.as_ptr(), msg.as_ptr()) };
+}
+
+fn log_info(message_str: String)  {
+    use ndk_sys::__android_log_buf_write;
+    use ndk_sys::{android_LogPriority, log_id};
+
+    let priority = android_LogPriority::ANDROID_LOG_INFO.0;
+    let buffer = log_id::LOG_ID_DEFAULT.0;
+    let tag = CString::from(c"PANIC");
+    let msg = match CString::new(message_str) {
+        Ok(s) => s,
+        Err(e) => {
+            return;
+        }
+    };
+
+    unsafe { __android_log_buf_write(buffer as i32, priority as i32, tag.as_ptr(), msg.as_ptr()) };
+}
+
+pub fn panic_hook(
+    backtrace: bool,
+    spantrace: bool,
+) -> Box<dyn Fn(&PanicHookInfo<'_>) + Send + Sync + 'static> {
+    // Mostly taken from https://doc.rust-lang.org/src/std/panicking.rs.html
+    Box::new(move |info| {
+        let location = info.location().unwrap();
+        let msg = match info.payload().downcast_ref::<&'static str>() {
+            Some(s) => *s,
+            None => match info.payload().downcast_ref::<String>() {
+                Some(s) => &s[..],
+                None => "Box<dyn Any>",
+            },
+        };
+
+        log_error(format!(
+            "Panicked at '{}', {} {} {}",
+            location.file(),
+            location.line(),
+            location.column(),
+            msg
+        ));
+        if backtrace {
+            log_error(format!(
+                "Backtrace: {:#?}",
+                Backtrace::force_capture()
+            ));
+        }
+        if spantrace {
+            log_error(format!(
+                "SpanTrace: {:#?}",
+                SpanTrace::capture()
+            ));
+        }
+    })
 }
