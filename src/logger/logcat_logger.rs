@@ -126,7 +126,7 @@ pub(crate) fn do_log(log: &super::log_data::LogData) -> Result<()> {
         {
             use ndk_sys::__android_log_buf_write;
     
-            unsafe { __android_log_buf_write(Buffer::Default as i32, priority as i32, tag.as_ptr(), message.as_ptr()) };
+            unsafe { __android_log_buf_write(Buffer::Main as i32, priority as i32, tag.as_ptr(), message.as_ptr()) };
         }
 
         buffer.clear();
